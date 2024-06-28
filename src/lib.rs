@@ -3,6 +3,11 @@
 
 pub use ark_bn254::Fr as Fq;
 
+use arrayref::array_ref;
+use num_bigint::{BigInt as NumBigInt, RandBigInt, Sign, ToBigInt};
+use ark_std::cmp::min;
+pub mod utils;
+
 use ark_ff::{biginteger::BigInteger256 as BigInt, BigInteger};
 use ark_ff::{fields::Field, PrimeField};
 // use ark_ff::BigInt; // TODO
@@ -48,10 +53,12 @@ use lazy_static::lazy_static;
 
 lazy_static! {
     pub static ref D: Fq = Fq::from_str("168696").unwrap();
-    pub static ref D_BIG: BigInt = D.into_bigint();
+    pub static ref D_BIG: NumBigInt = NumBigInt::parse_bytes(b"168696", 10).unwrap();//D.into_bigint();
     pub static ref A: Fq = Fq::from_str("168700").unwrap();
-    pub static ref A_BIG: BigInt = A.into_bigint();
-    pub static ref Q: BigInt = Fq::MODULUS;
+    pub static ref A_BIG: NumBigInt = NumBigInt::parse_bytes(b"168700", 10).unwrap(); //A.into_bigint();
+    pub static ref Q: NumBigInt = NumBigInt::parse_bytes(
+        b"21888242871839275222246405745257275088548364400416034343698204186575808495617",10
+    ).unwrap();//Fq::MODULUS;
     pub static ref B8: Point = Point {
         x: Fq::from_str(
             "5299619240641551281634865583518297030282874472190772894086521144482721001553",
@@ -181,24 +188,26 @@ impl Point {
         r.affine()
     }
 
-    // pub fn compress(&self) -> [u8; 32] {
-    //     let p = &self;
-    //     let mut r: [u8; 32] = [0; 32];
-    //     // let x_big = BigInt::parse_bytes(to_hex(&p.x).as_bytes(), 16).unwrap();
-    //     // let y_big = BigInt::parse_bytes(to_hex(&p.y).as_bytes(), 16).unwrap();
-    //     // let x_big = BigInt::parse_bytes(&p.x.into_bigint().to_bytes_be(), 16).unwrap();
-    //     // let y_big = BigInt::parse_bytes(&p.y.into_bigint().to_bytes_be(), 16).unwrap();
-    //     let x_big = &p.x.into_bigint();
-    //     let y_big = &p.y.into_bigint();
-    //     // let (_, y_bytes) = y_big.to_bytes_le();
-    //     let y_bytes = y_big.to_bytes_le();
-    //     let len = min(y_bytes.len(), r.len());
-    //     r[..len].copy_from_slice(&y_bytes[..len]);
-    //     if x_big > (Q.clone() >> 1) {
-    //         r[31] |= 0x80;
-    //     }
-    //     r
-    // }
+    pub fn compress(&self) -> [u8; 32] {
+        //let p = &self;
+        let mut r: [u8; 32] = [0; 32];
+        // let x_big: NumBigInt = NumBigInt::parse_bytes(to_hex(&p.x).as_bytes(), 16).unwrap();
+        // let y_big = NumBigInt::parse_bytes(to_hex(&p.y).as_bytes(), 16).unwrap();
+        // let x_big = NumBigInt::parse_bytes(&self.x.into_bigint().to_bytes_be(), 16).unwrap();
+        // let y_big = NumBigInt::parse_bytes(&self.y.into_bigint().to_bytes_be(), 16).unwrap();
+        let x_big = NumBigInt::from_str(&self.x.into_bigint().to_string()).unwrap();
+        let y_big = NumBigInt::from_str(&self.y.into_bigint().to_string()).unwrap();
+        //let x_big = &p.x.into_bigint();
+        //let y_big = &p.y.into_bigint();
+        let (_, y_bytes) = y_big.to_bytes_le();
+        //let y_bytes = y_big.to_bytes_le();
+        let len = min(y_bytes.len(), r.len());
+        r[..len].copy_from_slice(&y_bytes[..len]);
+        if x_big > (Q.clone() >> 1) {
+            r[31] |= 0x80;
+        }
+        r
+    }
 
     pub fn equals(&self, p: Point) -> bool {
         if self.x == p.x && self.y == p.y {
@@ -212,39 +221,39 @@ pub fn test_bit(b: &[u8], i: usize) -> bool {
     b[i / 8] & (1 << (i % 8)) != 0
 }
 
-// pub fn decompress_point(bb: [u8; 32]) -> Result<Point, String> {
-//     // https://tools.ietf.org/html/rfc8032#section-5.2.3
-//     let mut sign: bool = false;
-//     let mut b = bb;
-//     if b[31] & 0x80 != 0x00 {
-//         sign = true;
-//         b[31] &= 0x7F;
-//     }
-//     let y: BigInt = BigInt::from_bytes_le(Sign::Plus, &b[..]);
-//     if y >= Q.clone() {
-//         return Err("y outside the Finite Field over R".to_string());
-//     }
-//     let one: BigInt = One::one();
-//
-//     // x^2 = (1 - y^2) / (a - d * y^2) (mod p)
-//     let den = utils::modinv(
-//         &utils::modulus(
-//             &(&A_BIG.clone() - utils::modulus(&(&D_BIG.clone() * (&y * &y)), &Q)),
-//             &Q,
-//         ),
-//         &Q,
-//     )?;
-//     let mut x: BigInt = utils::modulus(&((one - utils::modulus(&(&y * &y), &Q)) * den), &Q);
-//     x = utils::modsqrt(&x, &Q)?;
-//
-//     if sign && (x <= (&Q.clone() >> 1)) || (!sign && (x > (&Q.clone() >> 1))) {
-//         x *= -(1.to_bigint().unwrap());
-//     }
-//     x = utils::modulus(&x, &Q);
-//     let x_fr: Fq = Fq::from_str(&x.to_string()).unwrap();
-//     let y_fr: Fq = Fq::from_str(&y.to_string()).unwrap();
-//     Ok(Point { x: x_fr, y: y_fr })
-// }
+pub fn decompress_point(bb: [u8; 32]) -> Result<Point, String> {
+    // https://tools.ietf.org/html/rfc8032#section-5.2.3
+    let mut sign: bool = false;
+    let mut b = bb;
+    if b[31] & 0x80 != 0x00 {
+        sign = true;
+        b[31] &= 0x7F;
+    }
+    let y: NumBigInt = NumBigInt::from_bytes_le(Sign::Plus, &b[..]);
+    if y >= Q.clone() {
+        return Err("y outside the Finite Field over R".to_string());
+    }
+    let one: NumBigInt = One::one();
+
+    // x^2 = (1 - y^2) / (a - d * y^2) (mod p)
+    let den: NumBigInt = utils::modinv(
+        &utils::modulus(
+            &(&A_BIG.clone() - utils::modulus(&(&D_BIG.clone() * (&y * &y)), &Q)),
+            &Q,
+        ),
+        &Q,
+    )?;
+    let mut x: NumBigInt = utils::modulus(&((one - utils::modulus(&(&y * &y), &Q)) * den), &Q);
+    x = utils::modsqrt(&x, &Q)?;
+
+    if sign && (x <= (&Q.clone() >> 1)) || (!sign && (x > (&Q.clone() >> 1))) {
+        x *= -(1.to_bigint().unwrap());
+    }
+    x = utils::modulus(&x, &Q);
+    let x_fr: Fq = Fq::from_str(&x.to_string()).unwrap();
+    let y_fr: Fq = Fq::from_str(&y.to_string()).unwrap();
+    Ok(Point { x: x_fr, y: y_fr })
+}
 
 #[cfg(not(feature = "aarch64"))]
 #[cfg(not(feature = "wasm"))]
@@ -276,30 +285,33 @@ pub struct Signature {
     pub s: Fr,
 }
 
-// impl Signature {
-//     pub fn compress(&self) -> [u8; 64] {
-//         let mut b: Vec<u8> = Vec::new();
-//         b.append(&mut self.r_b8.compress().to_vec());
-//         let (_, s_bytes) = self.s.to_bytes_le();
-//         let mut s_32bytes: [u8; 32] = [0; 32];
-//         let len = min(s_bytes.len(), s_32bytes.len());
-//         s_32bytes[..len].copy_from_slice(&s_bytes[..len]);
-//         b.append(&mut s_32bytes.to_vec());
-//         let mut r: [u8; 64] = [0; 64];
-//         r[..].copy_from_slice(&b[..]);
-//         r
-//     }
-// }
+impl Signature {
+    pub fn compress(&self) -> [u8; 64] {
+        let mut b: Vec<u8> = Vec::new();
+        b.append(&mut self.r_b8.compress().to_vec());
+        let s_bytes =  self.s.into_bigint().to_bytes_le();
+        let mut s_32bytes: [u8; 32] = [0; 32];
+        let len = min(s_bytes.len(), s_32bytes.len());
+        s_32bytes[..len].copy_from_slice(&s_bytes[..len]);
+        b.append(&mut s_32bytes.to_vec());
+        let mut r: [u8; 64] = [0; 64];
+        r[..].copy_from_slice(&b[..]);
+        r
+    }
+}
 
-// pub fn decompress_signature(b: &[u8; 64]) -> Result<Signature, String> {
-//     let r_b8_bytes: [u8; 32] = *array_ref!(b[..32], 0, 32);
-//     let s: BigInt = BigInt::from_bytes_le(Sign::Plus, &b[32..]);
-//     let r_b8 = decompress_point(r_b8_bytes);
-//     match r_b8 {
-//         Result::Err(err) => Err(err),
-//         Result::Ok(res) => Ok(Signature { r_b8: res, s }),
-//     }
-// }
+pub fn decompress_signature(b: &[u8; 64]) -> Result<Signature, String> {
+    let r_b8_bytes: [u8; 32] = *array_ref!(b[..32], 0, 32);
+    let s: NumBigInt = NumBigInt::from_bytes_le(Sign::Plus, &b[32..]);
+    let r_b8 = decompress_point(r_b8_bytes);
+    match r_b8 {
+        Result::Err(err) => Err(err),
+        Result::Ok(res) => Ok(Signature { 
+            r_b8: res, 
+            s: Fr::from_str(&s.to_string()).unwrap()
+        })
+    }
+}
 
 pub struct PrivateKey {
     pub key: [u8; 32],
