@@ -5,7 +5,8 @@ authors = ["arnaucube <root@arnaucube.com>"]
 edition = "2021"
 license = "GPL-3.0"
 description = "BabyJubJub elliptic curve implementation"
-repository = "https://github.com/arnaucube/babyjubjub-ark"
+#repository = "https://github.com/arnaucube/babyjubjub-ark"
+repository = "https://github.com/ivabe/babyjubjub-ark.git"
 readme = "README.md"
 
 [dependencies]
@@ -39,5 +40,5 @@ harness = false
 [features]
 default = ["blake-hash"] # compatible with circomlib
 aarch64 = ["blake"] # compatible with circomlib
-wasm = ["blake2"] # Warning: this feature is not compatible with the circomlib key generation (meaning that same secret keys will lead to different public keys. But the signatures are compatible with circomlib & circomlibjs.
+wasm = ["blake2"] # Warning: this feature is not compatible with the circomlib key generation (meaning that same secret keys will lead to different public keys. But the signatures are compatible with circomlib & circomlibjs).
 # wasm = ["blake-hash"]
